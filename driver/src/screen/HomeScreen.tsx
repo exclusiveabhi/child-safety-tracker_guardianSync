@@ -25,7 +25,6 @@ interface RouteParams {
 
 console.log("Backend URL:", DEVICE_IP);
 
-// Request location permission
 const requestLocationPermission = async (): Promise<boolean> => {
   if (Platform.OS === 'android') {
     try {
@@ -52,7 +51,6 @@ const requestLocationPermission = async (): Promise<boolean> => {
   return false;
 };
 
-// Request camera permission (Android)
 const requestCameraPermission = async (): Promise<boolean> => {
   if (Platform.OS === 'android') {
     try {
@@ -73,7 +71,6 @@ const requestCameraPermission = async (): Promise<boolean> => {
       return false;
     }
   }
-  // On iOS, assume permission is handled via Info.plist.
   return true;
 };
 
@@ -83,20 +80,40 @@ const HomeScreen: React.FC = () => {
 
   const [isTracking, setIsTracking] = useState<boolean>(false);
   const [watchId, setWatchId] = useState<number | null>(null);
-  // Driver selects the scan event type—no manual studentId entry.
   const [scanType, setScanType] = useState<string>('pickup_home');
-  const [scannedFace, setScannedFace] = useState<string>('');
   const [autoScanActive, setAutoScanActive] = useState<boolean>(false);
+  const [flashColor, setFlashColor] = useState<string>('');
+  const [showFlash, setShowFlash] = useState<boolean>(false);
+  const [cameraIsReady, setCameraIsReady] = useState<boolean>(false);
+
+  // capturingRef ensures we do not initiate another capture if one is in progress.
+  const capturingRef = useRef<boolean>(false);
+  // scanIntervalRef stores the interval ID for scanning.
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cameraRef = useRef<RNCamera>(null);
 
-  // Change Android navigation bar color to white on mount
   useEffect(() => {
     if (Platform.OS === 'android') {
-      changeNavigationBarColor('#FFFFFF', false); // false for dark icons
+      changeNavigationBarColor('#FFFFFF', false);
     }
+    return () => {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+      }
+    };
   }, []);
 
-  // Location tracking function
+  // Reset camera readiness and clear interval when scanning stops.
+  useEffect(() => {
+    if (!autoScanActive) {
+      setCameraIsReady(false);
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+    }
+  }, [autoScanActive]);
+
   const beginTracking = () => {
     const id = Geolocation.watchPosition(
       (position) => {
@@ -168,34 +185,6 @@ const HomeScreen: React.FC = () => {
     setIsTracking(false);
   };
 
-  // onCameraReady triggers auto capture after a delay.
-  const onCameraReady = () => {
-    setTimeout(async () => {
-      if (cameraRef.current) {
-        try {
-          await cameraRef.current.resumePreview?.();
-          const options = { quality: 0.5, base64: true };
-          const data = await cameraRef.current.takePictureAsync(options);
-          if (data.base64) {
-            const capturedImage = `data:${data.type};base64,${data.base64}`;
-            setScannedFace(capturedImage);
-            setAutoScanActive(false);
-            await scanFaceAPI(capturedImage);
-          } else {
-            Alert.alert('Image capture failed: no image data');
-            setAutoScanActive(false);
-          }
-        } catch (error) {
-          console.error('Error capturing image:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          Alert.alert('Error capturing image', errorMessage);
-          setAutoScanActive(false);
-        }
-      }
-    }, 1500);
-  };
-
-  // Call /scan-face endpoint with captured image data.
   const scanFaceAPI = async (imageData: string) => {
     try {
       const response = await fetch(`${DEVICE_IP}/scan-face`, {
@@ -211,28 +200,92 @@ const HomeScreen: React.FC = () => {
         }),
       });
       const rawText = await response.text();
-      console.log('Raw response text:', rawText);
       let data;
       try {
         data = JSON.parse(rawText);
       } catch (parseError) {
         console.error('JSON parse error:', parseError, rawText);
-        throw parseError;
+        return { type: 'error', message: 'Invalid response' };
       }
       if (response.ok) {
         console.log('Scan Success:', data.message);
-        Alert.alert('Scan Success', data.message);
+        return { type: 'success', message: data.message };
       } else {
         console.log('Scan Failed:', data.message);
-        Alert.alert('Scan Failed', data.message || 'Error processing scan');
+        if (data.message && data.message.toLowerCase().includes('not found')) {
+          return { type: 'notFound', message: data.message };
+        }
+        return { type: 'error', message: data.message || 'Error processing scan' };
       }
     } catch (error) {
       console.error('Error scanning face:', error);
-      Alert.alert('Error scanning face', error instanceof Error ? error.message : 'Unknown error');
+      return { type: 'error', message: error instanceof Error ? error.message : 'Unknown error' };
     }
   };
 
-  // Handler for auto scan: request camera permission then launch camera modal.
+  // performScan ensures no new capture is started if one is in progress.
+  const performScan = async () => {
+    if (!autoScanActive) return;
+    if (!cameraRef.current) {
+      console.warn("Camera component unmounted, stopping scan loop.");
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+      return;
+    }
+    if (!cameraIsReady) return; // skip if camera is not ready
+
+    // If a capture is already in progress, skip this iteration.
+    if (capturingRef.current) return;
+
+    capturingRef.current = true;
+    try {
+      const options = { quality: 0.2, base64: true };
+      const data = await cameraRef.current.takePictureAsync(options);
+      if (data?.base64) {
+        const capturedImage = `data:${data.type};base64,${data.base64}`;
+        const result = await scanFaceAPI(capturedImage);
+        if (result.type === 'success') {
+          setFlashColor('green');
+        } else if (result.type === 'notFound') {
+          setFlashColor('skyblue');
+        } else {
+          setFlashColor('red');
+        }
+        setShowFlash(true);
+        console.log(result.message);
+        setTimeout(() => {
+          setShowFlash(false);
+        }, 200);
+      }
+    } catch (error) {
+      console.error('Error during scanning:', error);
+    } finally {
+      capturingRef.current = false;
+    }
+  };
+
+  // Start scanning loop using setInterval when autoScanActive and cameraIsReady are true.
+  useEffect(() => {
+    if (autoScanActive && cameraIsReady) {
+      scanIntervalRef.current = setInterval(() => {
+        performScan();
+      }, 100); // adjust interval as needed
+    } else {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+    };
+  }, [autoScanActive, cameraIsReady]);
+
   const handleAutoScanPress = async (type: string) => {
     setScanType(type);
     const hasCameraPermission = await requestCameraPermission();
@@ -240,7 +293,19 @@ const HomeScreen: React.FC = () => {
       Alert.alert('Camera permission is required to scan face');
       return;
     }
+    // Reset camera readiness and start scanning.
+    setCameraIsReady(false);
     setAutoScanActive(true);
+  };
+
+  // Stop scanning: clear the scanning interval, reset states, and cancel pending captures.
+  const stopScanning = () => {
+    setAutoScanActive(false);
+    setCameraIsReady(false);
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
   };
 
   return (
@@ -250,64 +315,86 @@ const HomeScreen: React.FC = () => {
         <Text style={styles.welcome}>Welcome Bus Driver</Text>
         <Text style={styles.busNumber}>Bus Number: {busNumber}</Text>
         <Text style={styles.route}>Route: {routeDetails}</Text>
-        <TouchableOpacity style={[styles.trackButton, isTracking && styles.stopButton]} onPress={isTracking ? stopTracking : startTracking}>
-          <Text style={styles.trackButtonText}>{isTracking ? 'Stop Tracking' : 'Start Tracking'}</Text>
+        <TouchableOpacity
+          style={[styles.trackButton, isTracking && styles.stopButton]}
+          onPress={isTracking ? stopTracking : startTracking}
+        >
+          <Text style={styles.trackButtonText}>
+            {isTracking ? 'Stop Tracking' : 'Start Tracking'}
+          </Text>
         </TouchableOpacity>
-        {/* Section for face scan */}
         <View style={styles.scanSection}>
           <Text style={styles.scanTitle}>Automatic Face Scan</Text>
           <Text style={styles.infoText}>Home to School scan:</Text>
           <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.scanOptionButton} onPress={() => handleAutoScanPress('pickup_home')}>
+            <TouchableOpacity
+              style={styles.scanOptionButton}
+              onPress={() => handleAutoScanPress('pickup_home')}
+            >
               <Text style={styles.optionText}>Morning Pickup</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.scanOptionButton} onPress={() => handleAutoScanPress('dropoff_school')}>
+            <TouchableOpacity
+              style={styles.scanOptionButton}
+              onPress={() => handleAutoScanPress('dropoff_school')}
+            >
               <Text style={styles.optionText}>Morning Drop-off</Text>
             </TouchableOpacity>
           </View>
           <Text style={styles.infoText}>School to Home scan:</Text>
           <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.scanOptionButton} onPress={() => handleAutoScanPress('pickup_school')}>
+            <TouchableOpacity
+              style={styles.scanOptionButton}
+              onPress={() => handleAutoScanPress('pickup_school')}
+            >
               <Text style={styles.optionText}>Evening Pickup</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.scanOptionButton} onPress={() => handleAutoScanPress('dropoff_home')}>
+            <TouchableOpacity
+              style={styles.scanOptionButton}
+              onPress={() => handleAutoScanPress('dropoff_home')}
+            >
               <Text style={styles.optionText}>Evening Drop-off</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
-      {/* Modal for auto face capture */}
-      <Modal visible={autoScanActive} transparent={false} animationType="slide" onRequestClose={() => setAutoScanActive(false)}>
-        <RNCamera
-          ref={cameraRef}
-          style={styles.camera}
-          type={RNCamera.Constants.Type.front}
-          captureAudio={false}
-          onCameraReady={onCameraReady}
-          notAuthorizedView={
-            <View style={styles.cameraOverlay}>
-              <Text style={styles.cameraText}>Camera not authorized</Text>
-            </View>
-          }
-          pendingAuthorizationView={
-            <View style={styles.cameraOverlay}>
-              <Text style={styles.cameraText}>Waiting for camera permission</Text>
-            </View>
-          }
-        >
-          {({ status }) => {
-            if (status !== 'READY') {
-              return (
-                <View style={styles.cameraOverlay}>
-                  <Text style={styles.cameraText}>Camera Loading...</Text>
-                </View>
-              );
+      <Modal
+        visible={autoScanActive}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={stopScanning}
+      >
+        <View style={{ flex: 1 }}>
+          <RNCamera
+            ref={cameraRef}
+            style={styles.camera}
+            type={RNCamera.Constants.Type.front}
+            captureAudio={false}
+            onCameraReady={() => {
+              console.log('Camera is ready');
+              setCameraIsReady(true);
+            }}
+            notAuthorizedView={
+              <View style={styles.cameraOverlay}>
+                <Text style={styles.cameraText}>Camera not authorized</Text>
+              </View>
             }
-            return <View style={{ flex: 1 }} />;
-          }}
-        </RNCamera>
+            pendingAuthorizationView={
+              <View style={styles.cameraOverlay}>
+                <Text style={styles.cameraText}>Waiting for camera permission</Text>
+              </View>
+            }
+          />
+          {showFlash && (
+            <View style={[styles.flashOverlay, { backgroundColor: flashColor }]} />
+          )}
+          <TouchableOpacity
+            style={styles.stopScanButton}
+            onPress={stopScanning}
+          >
+            <Text style={styles.stopScanButtonText}>Stop Scanning</Text>
+          </TouchableOpacity>
+        </View>
       </Modal>
-      {/* Footer Text */}
       <View style={styles.footer}>
         <Text style={styles.footerText}>Made by Team GuardianSync</Text>
       </View>
@@ -411,6 +498,25 @@ const styles = StyleSheet.create({
   cameraText: {
     color: '#fff',
     fontSize: 18,
+  },
+  flashOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.7,
+    zIndex: 10,
+  },
+  stopScanButton: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    backgroundColor: '#0096FF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+  },
+  stopScanButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   footer: {
     position: 'absolute',
