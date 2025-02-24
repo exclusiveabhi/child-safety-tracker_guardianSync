@@ -106,7 +106,7 @@ const LoginScreen = () => {
         <Text style={styles.continueText}>or continue with</Text>
         <TouchableOpacity style={styles.googleButtonContainer}>
           <Image
-            source={require("../assets/google.png")}
+            source={require("../assets/googleLogo.png")}
             style={styles.googleImage}
           />
           <Text style={styles.googleText}>Google</Text>
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.white,
     padding: 20,
-    paddingTop: 65,
+    paddingTop: 80,
   },
   textContainer: {
     marginVertical: 37,
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   },
   headingTextSync: {
     fontSize: 30,
-    color: colors.primary,
+    color: '#0096FF',
     fontFamily: fonts.SemiBold,
     marginLeft: 70,
   },
@@ -163,6 +163,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 10,
     fontFamily: fonts.Light,
+    color: colors.primary,
   },
   forgotPasswordText: {
     textAlign: "right",
@@ -171,7 +172,7 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   loginButtonWrapper: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#0096FF',
     borderRadius: 100,
     marginTop: 20,
   },
@@ -202,10 +203,12 @@ const styles = StyleSheet.create({
   googleImage: {
     height: 20,
     width: 20,
+    
   },
   googleText: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: fonts.SemiBold,
+    color: colors.primary,
   },
   footerContainer: {
     flexDirection: "row",

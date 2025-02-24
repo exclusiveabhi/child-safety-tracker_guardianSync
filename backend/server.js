@@ -273,6 +273,18 @@ const matchFaceAsync = async (scanned, stored) => {
 };
 
 // Updated /scan-face endpoint
+// Helper function: check if a given date is today.
+// Helper: check if a given date is today.
+function isToday(dateInput) {
+  const date = new Date(dateInput);
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
+}
+
 app.post('/scan-face', async (req, res) => {
   const { busNumber, scanType, scannedFace } = req.body;
   
@@ -281,12 +293,13 @@ app.post('/scan-face', async (req, res) => {
   }
   
   try {
+    // Get all students for the bus.
     const students = await Student.find({ busNumber });
     if (!students || students.length === 0) {
       return res.status(404).json({ message: 'No students found for this bus' });
     }
     
-    // Determine the scan cycle based on scanType
+    // Determine cycle: morning for "pickup_home" and "dropoff_school", evening for the others.
     let cycle = "";
     if (scanType === "pickup_home" || scanType === "dropoff_school") {
       cycle = "morning";
@@ -296,12 +309,42 @@ app.post('/scan-face', async (req, res) => {
       return res.status(400).json({ message: 'Invalid scanType' });
     }
     
-    // Only consider scans from the last 20 hours
+    // Only consider scans from the last 20 hours.
     const twentyHoursAgo = new Date(Date.now() - 20 * 60 * 60 * 1000);
     
-    // (Optional) Absent check for morning drop-off can remain here if needed.
+    // --- For morning drop-off scans, check for any student who wasn't picked up.
+    if (scanType === "dropoff_school" && cycle === "morning") {
+      // Iterate over every student on this bus.
+      for (const student of students) {
+        // Filter out scans older than 20 hours.
+        student.scans = student.scans.filter(event => new Date(event.timestamp) > twentyHoursAgo);
+        const hasPickup = student.scans.some(event => event.scanType === "pickup_home" && isToday(event.timestamp));
+        const alreadyAbsent = student.scans.some(event => event.scanType === "absent" && isToday(event.timestamp));
+        // If the student lacks a morning pickup and is not already marked absent...
+        if (!hasPickup && !alreadyAbsent) {
+          // Record an absent event.
+          const absentEvent = {
+            scanType: "absent",
+            cycle: "morning",
+            timestamp: new Date(),
+            success: false,
+          };
+          student.scans.push(absentEvent);
+          await student.save();
+          // Send an absent email.
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: student.email,
+            subject: `Absence Notification: ${student.name}`,
+            text: `Student ${student.name} (ID: ${student.studentId}) was not picked up this morning on bus ${busNumber} and is marked absent for today.`
+          });
+          console.log(`Student ${student.studentId} marked absent.`);
+        }
+      }
+    }
     
-    // Loop through students to find the best matching face (lowest distance)
+    // --- Process the scanned face for the current scan.
+    // Use your face matching function to find the best match.
     let bestMatch = null;
     let bestDistance = Infinity;
     for (const student of students) {
@@ -312,51 +355,49 @@ app.post('/scan-face', async (req, res) => {
       }
     }
     
-    // Use a raw Euclidean distance threshold (e.g. 0.6)
-    if (!bestMatch || bestDistance > 0.6) {
+    // Use threshold (e.g. 0.5) for a valid match.
+    if (!bestMatch || bestDistance > 0.5) {
       return res.status(404).json({ message: 'Student not found' });
     }
     
-    // Check to prevent duplicate scans for the same scanType
-    bestMatch.scans = bestMatch.scans.filter(event => event.timestamp > twentyHoursAgo);
+    // Check if the matched student is marked absent.
+    const isAbsent = bestMatch.scans.some(event => event.scanType === "absent" && isToday(event.timestamp));
+    if (isAbsent) {
+      return res.status(400).json({ message: 'Student marked absent for today.' });
+    }
+    
+    // For drop-off scans, ensure that a corresponding pickup exists.
+    if ((scanType === "dropoff_school" || scanType === "dropoff_home")) {
+      const expectedPickupType = (scanType === "dropoff_school") ? "pickup_home" : "pickup_school";
+      const pickupEvent = bestMatch.scans.find(event => event.scanType === expectedPickupType && isToday(event.timestamp));
+      if (!pickupEvent) {
+        return res.status(400).json({ message: 'Student not properly picked up earlier; cannot drop off.' });
+      }
+    }
+    
+    // Prevent duplicate scans for the same scanType.
     const existingEvent = bestMatch.scans.find(event => event.scanType === scanType);
     if (existingEvent) {
       return res.status(400).json({ message: 'Scan already recorded for this scan type' });
     }
     
-    // Determine scan success: pickups are always successful; drop-offs require a preceding pickup
-    let isPickup = (scanType === "pickup_home" || scanType === "pickup_school");
-    let isDropoff = (scanType === "dropoff_school" || scanType === "dropoff_home");
-    let success;
-    if (isPickup) {
-      success = true;
-    } else if (isDropoff) {
-      const expectedPickupType = (cycle === "morning") ? "pickup_home" : "pickup_school";
-      const pickupEvent = bestMatch.scans.find(event => event.scanType === expectedPickupType && event.cycle === cycle);
-      success = !!pickupEvent;
-    }
-    
-    if (isDropoff && !success) {
-      return res.status(400).json({ message: 'Student not properly picked up earlier; cannot drop off.' });
-    }
-    
-    // Record the scan event
+    // Record the scan event.
     const eventRecord = {
       scanType,
       cycle,
       timestamp: new Date(),
-      success: success,
+      success: true,
     };
     bestMatch.scans.push(eventRecord);
     await bestMatch.save();
     
-    // Prepare email notifications based on pickup or dropoff
+    // Prepare email notification for successful scans.
     let subject = '';
     let text = '';
-    if (isPickup) {
+    if (scanType === "pickup_home" || scanType === "pickup_school") {
       subject = `Pickup Successful: ${bestMatch.name}`;
       text = `Student ${bestMatch.name} (ID: ${bestMatch.studentId}) was successfully picked up at ${new Date().toLocaleTimeString()} on bus ${busNumber}.`;
-    } else if (isDropoff) {
+    } else if (scanType === "dropoff_school" || scanType === "dropoff_home") {
       subject = `Drop-off Successful: ${bestMatch.name}`;
       text = `Student ${bestMatch.name} (ID: ${bestMatch.studentId}) was successfully dropped off at ${new Date().toLocaleTimeString()} on bus ${busNumber}.`;
     }
@@ -368,12 +409,13 @@ app.post('/scan-face', async (req, res) => {
       text,
     });
     
-    return res.json({ message: `Scan processed successfully: ${isPickup ? 'Pickup' : 'Drop-off'} confirmed, email sent.` });
+    return res.json({ message: `Scan processed successfully: ${scanType.includes("pickup") ? 'Pickup' : 'Drop-off'} confirmed, email sent.` });
   } catch (error) {
     console.error('Error processing face scan:', error);
     return res.status(500).json({ message: 'Error processing face scan' });
   }
 });
+
 
 // ----------------- AUTHENTICATION & LOCATION -----------------
 const authenticate = (req, res, next) => {

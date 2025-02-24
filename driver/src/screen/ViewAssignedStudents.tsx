@@ -183,7 +183,7 @@ const ViewAssignedStudents: React.FC = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#673ab7" />
+        <ActivityIndicator size="large" color="#0096FF" />
       </View>
     );
   }
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   noStudentsText: {
     fontSize: 18,
     color: '#555',
-    marginTop: 40,
+    marginTop: 50,
   },
   card: {
     width: cardWidth,
