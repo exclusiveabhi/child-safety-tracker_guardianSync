@@ -1,0 +1,29 @@
+{
+  "name": "admin-portal",
+  "version": "1.0.0",
+  "main": "src/main.jsx",
+  "scripts": {
+    "start": "vite"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-node": "^4.22.0",
+    "axios": "^0.21.1",
+    "bcryptjs": "^2.4.3",
+    "canvas": "^3.1.0",
+    "cors": "^2.8.5",
+    "debug": "^4.4.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.1.1",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.16",
+    "face-api.js": "^0.22.2",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-router-dom": "^5.2.0"
+  },
+  "devDependencies": {
+    "vite": "^2.4.4"
+  }
+}
