@@ -224,47 +224,49 @@ const HomeScreen: React.FC = () => {
   };
 
   // performScan ensures no new capture is started if one is in progress.
-  const performScan = async () => {
-    if (!autoScanActive) return;
-    if (!cameraRef.current) {
-      console.warn("Camera component unmounted, stopping scan loop.");
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
-      return;
+  // In your performScan function (client-side)
+const performScan = async () => {
+  if (!autoScanActive) return;
+  if (!cameraRef.current) {
+    console.warn("Camera component unmounted, stopping scan loop.");
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
     }
-    if (!cameraIsReady) return; // skip if camera is not ready
+    return;
+  }
+  if (!cameraIsReady) return;
+  if (capturingRef.current) return;
 
-    // If a capture is already in progress, skip this iteration.
-    if (capturingRef.current) return;
-
-    capturingRef.current = true;
-    try {
-      const options = { quality: 0.2, base64: true };
-      const data = await cameraRef.current.takePictureAsync(options);
-      if (data?.base64) {
-        const capturedImage = `data:${data.type};base64,${data.base64}`;
-        const result = await scanFaceAPI(capturedImage);
-        if (result.type === 'success') {
-          setFlashColor('green');
-        } else if (result.type === 'notFound') {
-          setFlashColor('skyblue');
-        } else {
-          setFlashColor('red');
-        }
-        setShowFlash(true);
-        console.log(result.message);
-        setTimeout(() => {
-          setShowFlash(false);
-        }, 200);
+  capturingRef.current = true;
+  try {
+    // Increase quality slightly for better detection
+    const options = { quality: 0.3, base64: true };
+    const data = await cameraRef.current.takePictureAsync(options);
+    if (data?.base64) {
+      console.log("Captured image length:", data.base64.length);
+      const capturedImage = `data:${data.type};base64,${data.base64}`;
+      const result = await scanFaceAPI(capturedImage);
+      if (result.type === 'success') {
+        setFlashColor('green');
+      } else if (result.type === 'notFound') {
+        setFlashColor('skyblue');
+      } else {
+        setFlashColor('red');
       }
-    } catch (error) {
-      console.error('Error during scanning:', error);
-    } finally {
-      capturingRef.current = false;
+      setShowFlash(true);
+      console.log(result.message);
+      setTimeout(() => {
+        setShowFlash(false);
+      }, 200);
     }
-  };
+  } catch (error) {
+    console.error('Error during scanning:', error);
+  } finally {
+    capturingRef.current = false;
+  }
+};
+
 
   // Start scanning loop using setInterval when autoScanActive and cameraIsReady are true.
   useEffect(() => {
