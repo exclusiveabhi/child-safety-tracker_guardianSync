@@ -239,6 +239,18 @@ app.get('/bus-location/:busNumber', async (req, res) => {
   res.json(busLocation);
 });
 
+app.get('/students/:busNumber', async (req, res) => {
+  const { busNumber } = req.params;
+  console.log(`Fetching students for bus number: ${busNumber}`);
+  try {
+    const students = await Student.find({ busNumber });
+    console.log('Fetched students:', students);
+    res.json(students);
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    res.status(500).send('Error fetching students');
+  }});
+
 // ----------------- SCAN FACE ENDPOINT -----------------
 app.post('/scan-face', async (req, res) => {
   const { busNumber, scanType, scannedFace } = req.body;
