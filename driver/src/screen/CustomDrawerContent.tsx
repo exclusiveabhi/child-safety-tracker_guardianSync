@@ -11,8 +11,8 @@ const CustomDrawerContent: React.FC<any> = (props) => {
   const menuItems = [
     { label: "Home", route: "Home" },
     { label: "View Assigned Students", route: "ViewAssignedStudents" },
-    { label: "Feedback", route: "Feedback" },
-    { label: "Emergency Wards", route: "EmergencyWards" },
+    
+    { label: "Emergency SOS", route: "EmergencyWards" },
     { label: "App Info", route: "AppInfo" },
   ];
 

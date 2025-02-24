@@ -94,9 +94,7 @@ const LoginScreen = () => {
             <SimpleLineIcons name={"eye"} size={20} color={colors.secondary} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity>
-          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-        </TouchableOpacity>
+        
         <TouchableOpacity
           style={styles.loginButtonWrapper}
           onPress={handleLogin}
@@ -129,7 +127,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.white,
     padding: 20,
-    paddingTop: 80,
+    paddingTop: 95,
   },
   textContainer: {
     marginVertical: 37,

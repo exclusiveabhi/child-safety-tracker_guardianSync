@@ -5,7 +5,7 @@ import { View, Text, StyleSheet } from 'react-native';
 const ViewAssignedStudents: React.FC = () => {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>FeedBack Screen</Text>
+      <Text style={styles.title}>Emerygency SOS Screen</Text>
 
     </View>
   );
@@ -25,6 +25,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 10,
+    color: '#333',
   },
   subtitle: {
     fontSize: 16,
