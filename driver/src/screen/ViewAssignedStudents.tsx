@@ -82,12 +82,11 @@ const ViewAssignedStudents: React.FC = () => {
   // Helper: Capitalize the first letter of a word.
   const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 
-  // New helper: Get scan status for a specific scan type.
+  // Helper: Get individual scan status for a specific scan type.
   const getScanStatusForType = (scans: ScanEvent[], expectedType: string) => {
     // Filter today's scans matching the expected scanType exactly.
     const todaysScans = scans.filter(scan => scan.scanType === expectedType && isToday(scan.timestamp));
     if (todaysScans.length === 0) {
-      // If no scan exists, for morning pickup mark as Absent (in red), others show "Not Scanned".
       if (expectedType === 'pickup_home') {
          return { status: 'Morning Pickup Absent', color: 'red' };
       } else if (expectedType === 'dropoff_school') {
@@ -100,7 +99,6 @@ const ViewAssignedStudents: React.FC = () => {
          return { status: 'Not Scanned', color: '#555' };
       }
     }
-    // Use the latest scan for this type.
     todaysScans.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     const latest = todaysScans[0];
     if (latest.success) {
@@ -124,16 +122,29 @@ const ViewAssignedStudents: React.FC = () => {
          return { status: 'Evening Drop-off Absent', color: 'red' };
       }
     }
-    // Fallback
     return { status: 'Not Scanned', color: '#555' };
   };
 
+  // Render student card including individual scan statuses and overall latest scan info
   const renderStudentCard = ({ item }: { item: Student }) => {
     // Get statuses for all four scan types.
     const morningPickupStatus = getScanStatusForType(item.scans, 'pickup_home');
     const morningDropOffStatus = getScanStatusForType(item.scans, 'dropoff_school');
     const eveningPickupStatus = getScanStatusForType(item.scans, 'pickup_school');
     const eveningDropOffStatus = getScanStatusForType(item.scans, 'dropoff_home');
+
+    // Calculate overall latest scan (from all scans)
+    let overallDate = "No Scan";
+    let overallTime = "No Scan";
+    if (item.scans && item.scans.length > 0) {
+      const sortedAllScans = [...item.scans].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      const latestScan = sortedAllScans[0];
+      const dateObj = new Date(latestScan.timestamp);
+      overallDate = dateObj.toLocaleDateString();
+      overallTime = dateObj.toLocaleTimeString();
+    }
 
     return (
       <View style={styles.card}>
@@ -145,8 +156,9 @@ const ViewAssignedStudents: React.FC = () => {
           <Text style={styles.name}>{item.name}</Text>
           <Text style={styles.info}>ID: {item.studentId}</Text>
           <Text style={styles.info}>Class: {item.class}</Text>
-          <Text style={styles.info}>Email: {item.email}</Text>
           <Text style={styles.info}>Route: {item.route}</Text>
+          <Text style={styles.info}>Scan Status Date: {overallDate}</Text>
+          <Text style={styles.info}>Last Scan Time: {overallTime}</Text>
           <View style={styles.scanStatusContainer}>
             <Text style={[styles.scanStatusText, { color: morningPickupStatus.color }]}>
               {morningPickupStatus.status}
@@ -161,6 +173,8 @@ const ViewAssignedStudents: React.FC = () => {
               {eveningDropOffStatus.status}
             </Text>
           </View>
+          {/* Overall latest scan info */}
+          
         </View>
       </View>
     );
@@ -234,7 +248,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginVertical: 10,
     flexDirection: 'row',
-    padding: 15,
+    padding: 20,
     elevation: 2,
     shadowColor: '#000',
     shadowOpacity: 0.1,
@@ -242,14 +256,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   photo: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginTop: 8,
+    width: 120,
+    height: 140,
+    borderRadius: 20,
+    marginTop: 34,
+
   },
   details: {
     flex: 1,
-    marginLeft: 15,
+    marginLeft: 24,
     justifyContent: 'center',
   },
   name: {
