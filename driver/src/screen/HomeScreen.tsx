@@ -77,6 +77,8 @@ const requestCameraPermission = async (): Promise<boolean> => {
 const HomeScreen: React.FC = () => {
   const route = useRoute<RouteProp<{ params: RouteParams }, 'params'>>();
   const { busNumber = 'N/A', routeDetails = 'N/A', token = '' } = route.params || {};
+  // console.log("Route params:", route.params);
+
 
   const [isTracking, setIsTracking] = useState<boolean>(false);
   const [watchId, setWatchId] = useState<number | null>(null);

@@ -42,9 +42,10 @@ const LoginScreen = () => {
           index: 0,
           routes: [{
             name: "Main",
-            params: { busNumber, token: data.token, routeDetails: "" },
+            params: { busNumber, token: data.token, routeDetails: data.routeDetails },
           }],
         });
+        
       } else {
         const errorText = await response.text();
         Alert.alert("Login failed", errorText);
