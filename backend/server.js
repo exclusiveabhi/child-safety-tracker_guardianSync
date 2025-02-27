@@ -10,6 +10,10 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const port = 3000;
 
+// Additional requires for Socket.IO integration
+const http = require('http');
+const socketio = require('socket.io');
+
 app.use(morgan('dev'));
 app.use(cors());
 require('dotenv').config();
@@ -77,7 +81,6 @@ const locationSchema = new mongoose.Schema({
 const Location = mongoose.model('Location', locationSchema);
 
 // Assume Student and Admin models are defined in separate files in "./models" folder
-// For example, require them as needed:
 const Student = require('./models/Student');
 const Admin = require('./models/Admin');
 
@@ -258,7 +261,7 @@ const matchFaceAsync = async (scanned, stored) => {
       .withFaceDescriptor();
     if (!scannedDetection || !storedDetection) {
       console.log("Face not detected in one of the images");
-      return Infinity; // if a face is not detected, return a very high distance
+      return Infinity;
     }
     const distance = faceapi.euclideanDistance(
       scannedDetection.descriptor,
@@ -272,9 +275,7 @@ const matchFaceAsync = async (scanned, stored) => {
   }
 };
 
-// Updated /scan-face endpoint
 // Helper function: check if a given date is today.
-// Helper: check if a given date is today.
 function isToday(dateInput) {
   const date = new Date(dateInput);
   const today = new Date();
@@ -293,13 +294,11 @@ app.post('/scan-face', async (req, res) => {
   }
   
   try {
-    // Get all students for the bus.
     const students = await Student.find({ busNumber });
     if (!students || students.length === 0) {
       return res.status(404).json({ message: 'No students found for this bus' });
     }
     
-    // Determine cycle: morning for "pickup_home" and "dropoff_school", evening for the others.
     let cycle = "";
     if (scanType === "pickup_home" || scanType === "dropoff_school") {
       cycle = "morning";
@@ -309,42 +308,8 @@ app.post('/scan-face', async (req, res) => {
       return res.status(400).json({ message: 'Invalid scanType' });
     }
     
-    // Only consider scans from the last 20 hours.
     const twentyHoursAgo = new Date(Date.now() - 20 * 60 * 60 * 1000);
     
-    // --- For morning drop-off scans, check for any student who wasn't picked up.
-    if (scanType === "dropoff_school" && cycle === "morning") {
-      // Iterate over every student on this bus.
-      for (const student of students) {
-        // Filter out scans older than 20 hours.
-        student.scans = student.scans.filter(event => new Date(event.timestamp) > twentyHoursAgo);
-        const hasPickup = student.scans.some(event => event.scanType === "pickup_home" && isToday(event.timestamp));
-        const alreadyAbsent = student.scans.some(event => event.scanType === "absent" && isToday(event.timestamp));
-        // If the student lacks a morning pickup and is not already marked absent...
-        if (!hasPickup && !alreadyAbsent) {
-          // Record an absent event.
-          const absentEvent = {
-            scanType: "absent",
-            cycle: "morning",
-            timestamp: new Date(),
-            success: false,
-          };
-          student.scans.push(absentEvent);
-          await student.save();
-          // Send an absent email.
-          await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: student.email,
-            subject: `Absence Notification: ${student.name}`,
-            text: `Student ${student.name} (ID: ${student.studentId}) was not picked up this morning on bus ${busNumber} and is marked absent for today.`
-          });
-          console.log(`Student ${student.studentId} marked absent.`);
-        }
-      }
-    }
-    
-    // --- Process the scanned face for the current scan.
-    // Use your face matching function to find the best match.
     let bestMatch = null;
     let bestDistance = Infinity;
     for (const student of students) {
@@ -355,18 +320,15 @@ app.post('/scan-face', async (req, res) => {
       }
     }
     
-    // Use threshold (e.g. 0.5) for a valid match.
-    if (!bestMatch || bestDistance > 0.5) {
+    if (!bestMatch || bestDistance > 0.4) {
       return res.status(404).json({ message: 'Student not found' });
     }
     
-    // Check if the matched student is marked absent.
     const isAbsent = bestMatch.scans.some(event => event.scanType === "absent" && isToday(event.timestamp));
     if (isAbsent) {
       return res.status(400).json({ message: 'Student marked absent for today.' });
     }
     
-    // For drop-off scans, ensure that a corresponding pickup exists.
     if ((scanType === "dropoff_school" || scanType === "dropoff_home")) {
       const expectedPickupType = (scanType === "dropoff_school") ? "pickup_home" : "pickup_school";
       const pickupEvent = bestMatch.scans.find(event => event.scanType === expectedPickupType && isToday(event.timestamp));
@@ -375,13 +337,11 @@ app.post('/scan-face', async (req, res) => {
       }
     }
     
-    // Prevent duplicate scans for the same scanType.
     const existingEvent = bestMatch.scans.find(event => event.scanType === scanType);
     if (existingEvent) {
       return res.status(400).json({ message: 'Scan already recorded for this scan type' });
     }
     
-    // Record the scan event.
     const eventRecord = {
       scanType,
       cycle,
@@ -391,7 +351,6 @@ app.post('/scan-face', async (req, res) => {
     bestMatch.scans.push(eventRecord);
     await bestMatch.save();
     
-    // Prepare email notification for successful scans.
     let subject = '';
     let text = '';
     if (scanType === "pickup_home" || scanType === "pickup_school") {
@@ -409,13 +368,37 @@ app.post('/scan-face', async (req, res) => {
       text,
     });
     
+    if (scanType === "dropoff_school" && cycle === "morning") {
+      for (const student of students) {
+        student.scans = student.scans.filter(event => new Date(event.timestamp) > twentyHoursAgo);
+        const hasPickup = student.scans.some(event => event.scanType === "pickup_home" && isToday(event.timestamp));
+        const alreadyAbsent = student.scans.some(event => event.scanType === "absent" && isToday(event.timestamp));
+        if (!hasPickup && !alreadyAbsent) {
+          const absentEvent = {
+            scanType: "absent",
+            cycle: "morning",
+            timestamp: new Date(),
+            success: false,
+          };
+          student.scans.push(absentEvent);
+          await student.save();
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: student.email,
+            subject: `Absence Notification: ${student.name}`,
+            text: `Student ${student.name} (ID: ${student.studentId}) was not picked up this morning on bus ${busNumber} and is marked absent for today.`
+          });
+          console.log(`Student ${student.studentId} marked absent.`);
+        }
+      }
+    }
+    
     return res.json({ message: `Scan processed successfully: ${scanType.includes("pickup") ? 'Pickup' : 'Drop-off'} confirmed, email sent.` });
   } catch (error) {
     console.error('Error processing face scan:', error);
     return res.status(500).json({ message: 'Error processing face scan' });
   }
 });
-
 
 // ----------------- AUTHENTICATION & LOCATION -----------------
 const authenticate = (req, res, next) => {
@@ -468,7 +451,23 @@ async function initializeServer() {
   try {
     await initializeDatabase();
     await loadFaceModels();
-    app.listen(port, () => {
+    
+    // Create HTTP server and attach Socket.IO without modifying existing endpoints.
+    const server = http.createServer(app);
+    const io = socketio(server, { cors: { origin: "*" } });
+    
+    io.on('connection', (socket) => {
+      console.log(`New client connected: ${socket.id}`);
+      socket.on('joinBusRoom', (busNumber) => {
+        socket.join(busNumber);
+        console.log(`Socket ${socket.id} joined room: ${busNumber}`);
+      });
+      socket.on('disconnect', () => {
+        console.log(`Client disconnected: ${socket.id}`);
+      });
+    });
+    
+    server.listen(port, () => {
       console.log(`Server running at http://localhost:${port}`);
     });
   } catch (err) {

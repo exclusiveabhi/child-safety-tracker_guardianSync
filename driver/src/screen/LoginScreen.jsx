@@ -15,8 +15,12 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import SimpleLineIcons from "react-native-vector-icons/SimpleLineIcons";
 import { useNavigation } from "@react-navigation/native";
 // Import your environment configuration
-import { DEVICE_IP } from '@env';
-console.log("Backend URL:", DEVICE_IP);
+// import { DEVICE_IP } from '@env';
+// console.log("Backend URL:bb", DEVICE_IP);
+
+//env not working
+
+const DEVICE_IP = "http://192.168.177.51:3000";
 
 const LoginScreen = () => {
   const navigation = useNavigation();

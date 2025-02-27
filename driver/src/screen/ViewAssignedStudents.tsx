@@ -1,4 +1,3 @@
-// src/screen/ViewAssignedStudents.tsx
 import React, { useEffect, useState } from 'react';
 import { 
   View, 
@@ -10,7 +9,9 @@ import {
   ActivityIndicator 
 } from 'react-native';
 import { useRoute, RouteProp } from '@react-navigation/native';
-import { DEVICE_IP } from '@env';
+import io from 'socket.io-client'; // Socket.IO client for real-time updates
+
+const DEVICE_IP = "http://192.168.177.51:3000";
 
 interface ScanEvent {
   scanType: string; // e.g., "pickup_home", "dropoff_school", "pickup_school", "dropoff_home"
@@ -38,36 +39,49 @@ interface RouteParams {
 const ViewAssignedStudents: React.FC = () => {
   const route = useRoute<RouteProp<{ params: RouteParams }, 'params'>>();
   const { busNumber = '' } = route.params || {};
-
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Polling to fetch student data every 5 seconds
+  // Function to fetch students via REST API
+  const fetchStudents = async () => {
+    try {
+      const response = await fetch(`${DEVICE_IP}/students/${busNumber}`);
+      if (response.ok) {
+        const data = await response.json();
+        setStudents(data);
+      }
+    } catch (error) {
+      console.error("Error fetching students:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!busNumber) {
       setLoading(false);
       return;
     }
-    const fetchStudents = async () => {
-      try {
-        const response = await fetch(`${DEVICE_IP}/students/${busNumber}`);
-        if (response.ok) {
-          const data = await response.json();
-          setStudents(data);
-        } else {
-          console.error('Error fetching students:', response.status);
-        }
-      } catch (error) {
-        console.error('Error fetching students:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    // Initial fetch and then every 5 seconds
+    // Initial fetch to load student data immediately
     fetchStudents();
-    const intervalId = setInterval(fetchStudents, 5000);
-    return () => clearInterval(intervalId);
+
+    // Establish a WebSocket connection to the backend
+    const socket = io(DEVICE_IP);
+
+    // Join room for this bus number
+    socket.emit('joinBusRoom', busNumber);
+
+    // Listen for real-time updates from the server
+    socket.on('studentUpdate', (data: Student[]) => {
+      setStudents(data);
+      setLoading(false);
+    });
+
+    // Clean up the socket connection when the component unmounts
+    return () => {
+      socket.disconnect();
+    };
   }, [busNumber]);
 
   // Helper: Check if a given date string is today.
@@ -79,61 +93,56 @@ const ViewAssignedStudents: React.FC = () => {
            date.getDate() === today.getDate();
   };
 
-  // Helper: Capitalize the first letter of a word.
-  const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
-
   // Helper: Get individual scan status for a specific scan type.
   const getScanStatusForType = (scans: ScanEvent[], expectedType: string) => {
-    // Filter today's scans matching the expected scanType exactly.
     const todaysScans = scans.filter(scan => scan.scanType === expectedType && isToday(scan.timestamp));
     if (todaysScans.length === 0) {
       if (expectedType === 'pickup_home') {
-         return { status: 'Morning Pickup Absent', color: 'red' };
+        return { status: 'Morning Pickup Absent', color: 'red' };
       } else if (expectedType === 'dropoff_school') {
-         return { status: 'Morning Drop-off Not Scanned', color: '#555' };
+        return { status: 'Morning Drop-off Not Scanned', color: '#555' };
       } else if (expectedType === 'pickup_school') {
-         return { status: 'Evening Pickup Not Scanned', color: '#555' };
+        return { status: 'Evening Pickup Not Scanned', color: '#555' };
       } else if (expectedType === 'dropoff_home') {
-         return { status: 'Evening Drop-off Not Scanned', color: '#555' };
+        return { status: 'Evening Drop-off Not Scanned', color: '#555' };
       } else {
-         return { status: 'Not Scanned', color: '#555' };
+        return { status: 'Not Scanned', color: '#555' };
       }
     }
     todaysScans.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     const latest = todaysScans[0];
     if (latest.success) {
       if (expectedType === 'pickup_home') {
-         return { status: 'Morning Pickup Scan Done', color: 'green' };
+        return { status: 'Morning Pickup Scan Done', color: 'green' };
       } else if (expectedType === 'dropoff_school') {
-         return { status: 'Morning Drop-off Scan Done', color: 'green' };
+        return { status: 'Morning Drop-off Scan Done', color: 'green' };
       } else if (expectedType === 'pickup_school') {
-         return { status: 'Evening Pickup Scan Done', color: 'green' };
+        return { status: 'Evening Pickup Scan Done', color: 'green' };
       } else if (expectedType === 'dropoff_home') {
-         return { status: 'Evening Drop-off Scan Done', color: 'green' };
+        return { status: 'Evening Drop-off Scan Done', color: 'green' };
       }
     } else {
       if (expectedType === 'pickup_home') {
-         return { status: 'Morning Pickup Absent', color: 'red' };
+        return { status: 'Morning Pickup Absent', color: 'red' };
       } else if (expectedType === 'dropoff_school') {
-         return { status: 'Morning Drop-off Absent', color: 'red' };
+        return { status: 'Morning Drop-off Absent', color: 'red' };
       } else if (expectedType === 'pickup_school') {
-         return { status: 'Evening Pickup Absent', color: 'red' };
+        return { status: 'Evening Pickup Absent', color: 'red' };
       } else if (expectedType === 'dropoff_home') {
-         return { status: 'Evening Drop-off Absent', color: 'red' };
+        return { status: 'Evening Drop-off Absent', color: 'red' };
       }
     }
     return { status: 'Not Scanned', color: '#555' };
   };
 
-  // Render student card including individual scan statuses and overall latest scan info
+  // Render a card for each student showing their details and scan statuses.
   const renderStudentCard = ({ item }: { item: Student }) => {
-    // Get statuses for all four scan types.
     const morningPickupStatus = getScanStatusForType(item.scans, 'pickup_home');
     const morningDropOffStatus = getScanStatusForType(item.scans, 'dropoff_school');
     const eveningPickupStatus = getScanStatusForType(item.scans, 'pickup_school');
     const eveningDropOffStatus = getScanStatusForType(item.scans, 'dropoff_home');
 
-    // Calculate overall latest scan (from all scans)
+    // Calculate overall latest scan (if any)
     let overallDate = "No Scan";
     let overallTime = "No Scan";
     if (item.scans && item.scans.length > 0) {
@@ -148,10 +157,7 @@ const ViewAssignedStudents: React.FC = () => {
 
     return (
       <View style={styles.card}>
-        <Image 
-          source={{ uri: item.photo }} 
-          style={styles.photo} 
-        />
+        <Image source={{ uri: item.photo }} style={styles.photo} />
         <View style={styles.details}>
           <Text style={styles.name}>{item.name}</Text>
           <Text style={styles.info}>ID: {item.studentId}</Text>
@@ -173,8 +179,6 @@ const ViewAssignedStudents: React.FC = () => {
               {eveningDropOffStatus.status}
             </Text>
           </View>
-          {/* Overall latest scan info */}
-          
         </View>
       </View>
     );
@@ -259,8 +263,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 140,
     borderRadius: 20,
-    marginTop: 34,
-
+    marginTop: 44,
   },
   details: {
     flex: 1,

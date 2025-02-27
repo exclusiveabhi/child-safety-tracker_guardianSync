@@ -14,7 +14,6 @@ import {
 import { useRoute, RouteProp } from '@react-navigation/native';
 import Geolocation from 'react-native-geolocation-service';
 import { RNCamera } from 'react-native-camera';
-import { DEVICE_IP } from '@env';
 import changeNavigationBarColor from 'react-native-navigation-bar-color';
 
 interface RouteParams {
@@ -23,7 +22,7 @@ interface RouteParams {
   token?: string;
 }
 
-console.log("Backend URL:", DEVICE_IP);
+const DEVICE_IP = "http://192.168.177.51:3000";
 
 const requestLocationPermission = async (): Promise<boolean> => {
   if (Platform.OS === 'android') {
@@ -32,8 +31,7 @@ const requestLocationPermission = async (): Promise<boolean> => {
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         {
           title: 'Location Permission',
-          message:
-            'This app needs access to your location for tracking bus position.',
+          message: 'This app needs access to your location for tracking bus position.',
           buttonNeutral: 'Ask Me Later',
           buttonNegative: 'Cancel',
           buttonPositive: 'OK',
@@ -58,8 +56,7 @@ const requestCameraPermission = async (): Promise<boolean> => {
         PermissionsAndroid.PERMISSIONS.CAMERA,
         {
           title: 'Camera Permission',
-          message:
-            'This app needs access to your camera for face scanning.',
+          message: 'This app needs access to your camera for face scanning.',
           buttonNeutral: 'Ask Me Later',
           buttonNegative: 'Cancel',
           buttonPositive: 'OK',
@@ -77,8 +74,6 @@ const requestCameraPermission = async (): Promise<boolean> => {
 const HomeScreen: React.FC = () => {
   const route = useRoute<RouteProp<{ params: RouteParams }, 'params'>>();
   const { busNumber = 'N/A', routeDetails = 'N/A', token = '' } = route.params || {};
-  // console.log("Route params:", route.params);
-
 
   const [isTracking, setIsTracking] = useState<boolean>(false);
   const [watchId, setWatchId] = useState<number | null>(null);
@@ -88,31 +83,19 @@ const HomeScreen: React.FC = () => {
   const [showFlash, setShowFlash] = useState<boolean>(false);
   const [cameraIsReady, setCameraIsReady] = useState<boolean>(false);
 
-  // capturingRef ensures we do not initiate another capture if one is in progress.
+  // Ref to prevent overlapping captures
   const capturingRef = useRef<boolean>(false);
-  // scanIntervalRef stores the interval ID for scanning.
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cameraRef = useRef<RNCamera>(null);
 
   useEffect(() => {
     if (Platform.OS === 'android') {
       changeNavigationBarColor('#FFFFFF', false);
     }
-    return () => {
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-      }
-    };
   }, []);
 
-  // Reset camera readiness and clear interval when scanning stops.
   useEffect(() => {
     if (!autoScanActive) {
       setCameraIsReady(false);
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
     }
   }, [autoScanActive]);
 
@@ -134,9 +117,7 @@ const HomeScreen: React.FC = () => {
         })
           .then((response) => response.json())
           .then((data) => console.log('Location updated:', data))
-          .catch((error) =>
-            console.error('Error updating location:', error)
-          );
+          .catch((error) => console.error('Error updating location:', error));
       },
       (error) => {
         console.error('Location error:', error);
@@ -225,69 +206,63 @@ const HomeScreen: React.FC = () => {
     }
   };
 
-  // performScan ensures no new capture is started if one is in progress.
-  // In your performScan function (client-side)
-const performScan = async () => {
-  if (!autoScanActive) return;
-  if (!cameraRef.current) {
-    console.warn("Camera component unmounted, stopping scan loop.");
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
+  // Updated performScan using recursion instead of setInterval
+  const performScan = async () => {
+    if (!autoScanActive) return;
+    if (!cameraRef.current) {
+      return;
     }
-    return;
-  }
-  if (!cameraIsReady) return;
-  if (capturingRef.current) return;
+    if (!cameraIsReady) return;
+    if (capturingRef.current) return;
 
-  capturingRef.current = true;
-  try {
-    // Increase quality slightly for better detection
-    const options = { quality: 0.3, base64: true };
-    const data = await cameraRef.current.takePictureAsync(options);
-    if (data?.base64) {
-      console.log("Captured image length:", data.base64.length);
-      const capturedImage = `data:${data.type};base64,${data.base64}`;
-      const result = await scanFaceAPI(capturedImage);
-      if (result.type === 'success') {
-        setFlashColor('green');
-      } else if (result.type === 'notFound') {
-        setFlashColor('skyblue');
-      } else {
-        setFlashColor('red');
-      }
-      setShowFlash(true);
-      console.log(result.message);
-      setTimeout(() => {
-        setShowFlash(false);
-      }, 200);
+    capturingRef.current = true;
+    try {
+      // Lower quality to 0.1 for faster capture and transfer
+      const options = { quality: 0.1, base64: true };
+      const data = await cameraRef.current.takePictureAsync(options);
+      // Inside performScan, replace your current flash overlay block with this:
+if (data?.base64) {
+  console.log("Captured image length:", data.base64.length);
+  const capturedImage = `data:${data.type};base64,${data.base64}`;
+  const result = await scanFaceAPI(capturedImage);
+  
+  // Set the flash color based on result
+  if (result.type === 'success') {
+    // Full-screen dark green overlay for 2-3 sec on match found
+    setFlashColor('rgba(0,128,0,0.9)');
+  } else if (result.type === 'notFound') {
+    // Full-screen dark blue overlay for 2-3 sec when not found
+    setFlashColor('rgba(0,0,255,0.9)');
+  } else {
+    // Full-screen dark red overlay for errors
+    setFlashColor('rgba(255,0,0,0.9)');
+  }
+  
+  // Show the flash overlay for 3 seconds (adjust delay as needed)
+  setShowFlash(true);
+  setTimeout(() => {
+    setShowFlash(false);
+  }, 3000);
+  
+  console.log(result.message);
+}
+
+    } catch (error) {
+      console.error('Error during scanning:', error);
+    } finally {
+      capturingRef.current = false;
     }
-  } catch (error) {
-    console.error('Error during scanning:', error);
-  } finally {
-    capturingRef.current = false;
-  }
-};
+    // Recursively trigger the next scan immediately
+    if (autoScanActive) {
+      performScan();
+    }
+  };
 
-
-  // Start scanning loop using setInterval when autoScanActive and cameraIsReady are true.
+  // Start recursive scanning when autoScanActive and cameraIsReady are true
   useEffect(() => {
     if (autoScanActive && cameraIsReady) {
-      scanIntervalRef.current = setInterval(() => {
-        performScan();
-      }, 100); // adjust interval as needed
-    } else {
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
+      performScan();
     }
-    return () => {
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
-    };
   }, [autoScanActive, cameraIsReady]);
 
   const handleAutoScanPress = async (type: string) => {
@@ -302,14 +277,9 @@ const performScan = async () => {
     setAutoScanActive(true);
   };
 
-  // Stop scanning: clear the scanning interval, reset states, and cancel pending captures.
   const stopScanning = () => {
     setAutoScanActive(false);
     setCameraIsReady(false);
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
   };
 
   return (
@@ -505,7 +475,6 @@ const styles = StyleSheet.create({
   },
   flashOverlay: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.7,
     zIndex: 10,
   },
   stopScanButton: {

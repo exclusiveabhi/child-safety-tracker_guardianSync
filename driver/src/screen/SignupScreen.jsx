@@ -14,7 +14,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import SimpleLineIcons from "react-native-vector-icons/SimpleLineIcons";
 import { useNavigation } from "@react-navigation/native";
 import { DEVICE_IP } from '@env';
-console.log("Backend URL:", DEVICE_IP);
+console.log("Backend URL :", DEVICE_IP);
 
 
 const SignupScreen = () => {
