@@ -85,17 +85,18 @@ const GoogleMap = () => {
         <div
           style={{
             position: 'absolute',
-            top: '10px',
+            top: '5px',
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 1000,
             backgroundColor: 'rgba(255,255,255,0.9)',
             padding: '10px 20px',
             borderRadius: '5px',
-            boxShadow: '0 0 10px rgba(0,0,0,0.3)'
+            boxShadow: '0 0 10px rgba(229, 0, 0, 0.3)',
+            color: 'red',
           }}
         >
-          Driver is offline
+         {busNumber} Driver is offline
         </div>
       )}
     </div>
