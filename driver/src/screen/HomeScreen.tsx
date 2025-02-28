@@ -99,6 +99,21 @@ const HomeScreen: React.FC = () => {
     }
   }, [autoScanActive]);
 
+  // Helper to update the online status in the backend
+  const updateOnlineStatus = (online: boolean) => {
+    fetch(`${DEVICE_IP}/update-status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token ? `Bearer ${token}` : '',
+      },
+      body: JSON.stringify({ online }),
+    })
+      .then(response => response.json())
+      .then(data => console.log(`Status updated to ${online}:`, data))
+      .catch(error => console.error('Error updating status:', error));
+  };
+
   const beginTracking = () => {
     const id = Geolocation.watchPosition(
       (position) => {
@@ -146,7 +161,7 @@ const HomeScreen: React.FC = () => {
             onPress: async () => {
               const permissionGranted = await requestLocationPermission();
               if (permissionGranted) {
-                beginTracking();
+                startTracking();
               } else {
                 Alert.alert('Permission not granted');
               }
@@ -157,6 +172,8 @@ const HomeScreen: React.FC = () => {
       );
       return;
     }
+    // Set driver status to online
+    updateOnlineStatus(true);
     beginTracking();
   };
 
@@ -165,6 +182,8 @@ const HomeScreen: React.FC = () => {
       Geolocation.clearWatch(watchId);
       setWatchId(null);
     }
+    // Set driver status to offline
+    updateOnlineStatus(false);
     setIsTracking(false);
   };
 
@@ -209,9 +228,7 @@ const HomeScreen: React.FC = () => {
   // Updated performScan using recursion instead of setInterval
   const performScan = async () => {
     if (!autoScanActive) return;
-    if (!cameraRef.current) {
-      return;
-    }
+    if (!cameraRef.current) return;
     if (!cameraIsReady) return;
     if (capturingRef.current) return;
 
@@ -220,33 +237,25 @@ const HomeScreen: React.FC = () => {
       // Lower quality to 0.1 for faster capture and transfer
       const options = { quality: 0.1, base64: true };
       const data = await cameraRef.current.takePictureAsync(options);
-      // Inside performScan, replace your current flash overlay block with this:
-if (data?.base64) {
-  console.log("Captured image length:", data.base64.length);
-  const capturedImage = `data:${data.type};base64,${data.base64}`;
-  const result = await scanFaceAPI(capturedImage);
-  
-  // Set the flash color based on result
-  if (result.type === 'success') {
-    // Full-screen dark green overlay for 2-3 sec on match found
-    setFlashColor('rgba(0,128,0,0.9)');
-  } else if (result.type === 'notFound') {
-    // Full-screen dark blue overlay for 2-3 sec when not found
-    setFlashColor('rgba(0,0,255,0.9)');
-  } else {
-    // Full-screen dark red overlay for errors
-    setFlashColor('rgba(255,0,0,0.9)');
-  }
-  
-  // Show the flash overlay for 3 seconds (adjust delay as needed)
-  setShowFlash(true);
-  setTimeout(() => {
-    setShowFlash(false);
-  }, 3000);
-  
-  console.log(result.message);
-}
-
+      if (data?.base64) {
+        console.log("Captured image length:", data.base64.length);
+        const capturedImage = `data:${data.type};base64,${data.base64}`;
+        const result = await scanFaceAPI(capturedImage);
+        // Set the flash color based on result
+        if (result.type === 'success') {
+          setFlashColor('rgba(0,128,0,0.9)');
+        } else if (result.type === 'notFound') {
+          setFlashColor('rgba(0,0,255,0.9)');
+        } else {
+          setFlashColor('rgba(255,0,0,0.9)');
+        }
+        // Show the flash overlay for 3 seconds (adjust delay as needed)
+        setShowFlash(true);
+        setTimeout(() => {
+          setShowFlash(false);
+        }, 3000);
+        console.log(result.message);
+      }
     } catch (error) {
       console.error('Error during scanning:', error);
     } finally {

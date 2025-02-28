@@ -3,9 +3,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
 
-
-
-const FetchBusLocation = ({ busNumber }) => {
+// This component fetches the bus location and updates the parent's driverOnline state
+const FetchBusLocation = ({ busNumber, setDriverOnline }) => {
   const map = useMap();
   const [position, setPosition] = useState(null);
 
@@ -13,21 +12,30 @@ const FetchBusLocation = ({ busNumber }) => {
     const fetchBusLocation = async () => {
       try {
         const response = await axios.get(`http://localhost:3000/bus-location/${busNumber}`);
-        if (response.data) {
-          const latitude = 28.8703;
-          const longitude = 78.7571;
+        console.log('API response:', response.data);
+
+        // Check if online is true in the returned document
+        if (response.data && response.data.online) {
+          const { latitude, longitude } = response.data;
           setPosition([latitude, longitude]);
+          setDriverOnline(true);
           map.setView([latitude, longitude], 17);
         } else {
-          console.error('No data found for the bus number');
+          setDriverOnline(false);
+          setPosition(null);
         }
       } catch (error) {
         console.error('Error fetching bus location:', error);
+        setDriverOnline(false);
+        setPosition(null);
       }
     };
 
     fetchBusLocation();
-  }, [busNumber, map]);
+    const intervalId = setInterval(fetchBusLocation, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [busNumber, map, setDriverOnline]);
 
   return position ? (
     <Marker position={position}>
@@ -39,31 +47,20 @@ const FetchBusLocation = ({ busNumber }) => {
 const GoogleMap = () => {
   const [busNumber, setBusNumber] = useState('');
   const [showLocation, setShowLocation] = useState(false);
-  const [notFound, setNotFound] = useState(false);
+  // Parent state to hold driver online status from FetchBusLocation
+  const [driverOnline, setDriverOnline] = useState(null);
 
   const handleInputChange = (event) => {
     setBusNumber(event.target.value);
   };
 
   const handleSearch = async () => {
-    try {
-      const response = await axios.get(`http://localhost:3000/bus-location/${busNumber}`);
-      if (response.data) {
-        setShowLocation(true);
-        setNotFound(false);
-      } else {
-        setShowLocation(false);
-        setNotFound(true);
-      }
-    } catch (error) {
-      console.error('Error fetching bus location:', error);
-      setShowLocation(false);
-      setNotFound(true);
-    }
+    // Simply display the map; FetchBusLocation handles the online/offline check.
+    setShowLocation(true);
   };
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       <input
         type="text"
         value={busNumber}
@@ -71,14 +68,36 @@ const GoogleMap = () => {
         placeholder="Enter bus number"
       />
       <button onClick={handleSearch}>Search</button>
-      {notFound && <p>Bus number not found</p>}
-      <MapContainer center={[28.832144542791458, 78.77574510089143]} zoom={14} style={{ height: "100vh", width: "100%" }}>
+      <MapContainer
+        center={[28.832144542791458, 78.77574510089143]}
+        zoom={14}
+        style={{ height: "100vh", width: "100%" }}
+      >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution='&copy; OpenStreetMap contributors'
         />
-        {showLocation && <FetchBusLocation busNumber={busNumber} />}
+        {showLocation && (
+          <FetchBusLocation busNumber={busNumber} setDriverOnline={setDriverOnline} />
+        )}
       </MapContainer>
+      {showLocation && driverOnline === false && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '10px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+            backgroundColor: 'rgba(255,255,255,0.9)',
+            padding: '10px 20px',
+            borderRadius: '5px',
+            boxShadow: '0 0 10px rgba(0,0,0,0.3)'
+          }}
+        >
+          Driver is offline
+        </div>
+      )}
     </div>
   );
 };
