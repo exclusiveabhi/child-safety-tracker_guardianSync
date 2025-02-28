@@ -133,9 +133,16 @@ app.get('/students/:route', async (req, res) => {
 // API to register admin
 app.post('/admin/register', async (req, res) => {
   const { name, email, password } = req.body;
+  const allowedEmail = 'ankitsaini28052003@gmail.com'; 
+
   if (!name || !email || !password) {
     return res.status(400).json({ message: 'Name, email, and password are required' });
   }
+
+  if (email !== allowedEmail) {
+    return res.status(403).json({ message: 'Registration is restricted to a specific email address' });
+  }
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newAdmin = new Admin({ name, email, password: hashedPassword });
