@@ -43,7 +43,7 @@ const GoogleMapComponent = () => {
         }
       };
 
-      // Fetch immediately and then every 2 seconds
+      // Fetch immediately and then every 4 seconds
       fetchBusLocation();
       intervalId = setInterval(fetchBusLocation, 4000);
     }
@@ -61,9 +61,24 @@ const GoogleMapComponent = () => {
         value={busNumber}
         onChange={(e) => setBusNumber(e.target.value)}
         placeholder="Enter bus number"
-        style={{ padding: '8px', margin: '10px' }}
+        style={{
+          padding: '8px',
+          margin: '10px',
+          border: '1px solid black' 
+        }}
       />
-      <button onClick={handleSearch} style={{ padding: '8px', margin: '10px' }}>
+      <button
+        onClick={handleSearch}
+        style={{
+          backgroundColor: '#0f94ec',
+          padding: '8px',
+          margin: '10px',
+          color: 'white',
+          borderRadius: '2px solid #0f94ec',
+        }}
+        // Disable the button if the input field is empty
+        disabled={!busNumber}
+      >
         Search
       </button>
 
@@ -75,13 +90,13 @@ const GoogleMapComponent = () => {
         >
           {busLocation && (
             <Marker 
-              position={busLocation} 
+              position={busLocation}
               onClick={() => setSelectedMarker(busLocation)}
             />
           )}
 
           {selectedMarker && (
-            <InfoWindow 
+            <InfoWindow
               position={selectedMarker}
               onCloseClick={() => setSelectedMarker(null)}
             >
@@ -105,7 +120,7 @@ const GoogleMapComponent = () => {
             padding: '10px 20px',
             borderRadius: '5px',
             boxShadow: '0 0 10px rgba(229, 0, 0, 0.3)',
-            color: 'red',
+            color: 'red'
           }}
         >
           {busNumber} Driver is offline
