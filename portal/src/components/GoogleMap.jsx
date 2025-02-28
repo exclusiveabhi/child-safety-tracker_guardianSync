@@ -1,61 +1,56 @@
+// src/components/GoogleMap.jsx
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
+import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 
-// This component fetches the bus location and updates the parent's driverOnline state
-const FetchBusLocation = ({ busNumber, setDriverOnline }) => {
-  const map = useMap();
-  const [position, setPosition] = useState(null);
-
-  useEffect(() => {
-    const fetchBusLocation = async () => {
-      try {
-        const response = await axios.get(`http://localhost:3000/bus-location/${busNumber}`);
-        console.log('API response:', response.data);
-
-        // Check if online is true in the returned document
-        if (response.data && response.data.online) {
-          const { latitude, longitude } = response.data;
-          setPosition([latitude, longitude]);
-          setDriverOnline(true);
-          map.setView([latitude, longitude], 17);
-        } else {
-          setDriverOnline(false);
-          setPosition(null);
-        }
-      } catch (error) {
-        console.error('Error fetching bus location:', error);
-        setDriverOnline(false);
-        setPosition(null);
-      }
-    };
-
-    fetchBusLocation();
-    const intervalId = setInterval(fetchBusLocation, 2000);
-
-    return () => clearInterval(intervalId);
-  }, [busNumber, map, setDriverOnline]);
-
-  return position ? (
-    <Marker position={position}>
-      <Popup>Bus {busNumber} is here</Popup>
-    </Marker>
-  ) : null;
+const containerStyle = {
+  width: '100%',
+  height: '100vh'
 };
 
-const GoogleMap = () => {
+const defaultCenter = {
+  lat: 28.832144542791458,
+  lng: 78.77574510089143
+};
+
+const GoogleMapComponent = () => {
   const [busNumber, setBusNumber] = useState('');
   const [showLocation, setShowLocation] = useState(false);
-  // Parent state to hold driver online status from FetchBusLocation
   const [driverOnline, setDriverOnline] = useState(null);
+  const [busLocation, setBusLocation] = useState(null);
+  const [selectedMarker, setSelectedMarker] = useState(null);
 
-  const handleInputChange = (event) => {
-    setBusNumber(event.target.value);
-  };
+  useEffect(() => {
+    let intervalId;
+    if (showLocation && busNumber) {
+      const fetchBusLocation = async () => {
+        try {
+          const response = await axios.get(`http://localhost:3000/bus-location/${busNumber}`);
+          console.log('API response:', response.data);
 
-  const handleSearch = async () => {
-    // Simply display the map; FetchBusLocation handles the online/offline check.
+          if (response.data && response.data.online) {
+            const { latitude, longitude } = response.data;
+            setBusLocation({ lat: latitude, lng: longitude });
+            setDriverOnline(true);
+          } else {
+            setDriverOnline(false);
+            setBusLocation(null);
+          }
+        } catch (error) {
+          console.error('Error fetching bus location:', error);
+          setDriverOnline(false);
+          setBusLocation(null);
+        }
+      };
+
+      // Fetch immediately and then every 2 seconds
+      fetchBusLocation();
+      intervalId = setInterval(fetchBusLocation, 4000);
+    }
+    return () => clearInterval(intervalId);
+  }, [busNumber, showLocation]);
+
+  const handleSearch = () => {
     setShowLocation(true);
   };
 
@@ -64,23 +59,40 @@ const GoogleMap = () => {
       <input
         type="text"
         value={busNumber}
-        onChange={handleInputChange}
+        onChange={(e) => setBusNumber(e.target.value)}
         placeholder="Enter bus number"
+        style={{ padding: '8px', margin: '10px' }}
       />
-      <button onClick={handleSearch}>Search</button>
-      <MapContainer
-        center={[28.832144542791458, 78.77574510089143]}
-        zoom={14}
-        style={{ height: "100vh", width: "100%" }}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap contributors'
-        />
-        {showLocation && (
-          <FetchBusLocation busNumber={busNumber} setDriverOnline={setDriverOnline} />
-        )}
-      </MapContainer>
+      <button onClick={handleSearch} style={{ padding: '8px', margin: '10px' }}>
+        Search
+      </button>
+
+      <LoadScript googleMapsApiKey="AIzaSyAEvg7bTpUoReA0m-mIf55pEwp4YlwAWgM">
+        <GoogleMap
+          mapContainerStyle={containerStyle}
+          center={busLocation || defaultCenter}
+          zoom={busLocation ? 18 : 14}
+        >
+          {busLocation && (
+            <Marker 
+              position={busLocation} 
+              onClick={() => setSelectedMarker(busLocation)}
+            />
+          )}
+
+          {selectedMarker && (
+            <InfoWindow 
+              position={selectedMarker}
+              onCloseClick={() => setSelectedMarker(null)}
+            >
+              <div>
+                <h3>Bus {busNumber} is here</h3>
+              </div>
+            </InfoWindow>
+          )}
+        </GoogleMap>
+      </LoadScript>
+
       {showLocation && driverOnline === false && (
         <div
           style={{
@@ -96,11 +108,11 @@ const GoogleMap = () => {
             color: 'red',
           }}
         >
-         {busNumber} Driver is offline
+          {busNumber} Driver is offline
         </div>
       )}
     </div>
   );
 };
 
-export default GoogleMap;
+export default GoogleMapComponent;
