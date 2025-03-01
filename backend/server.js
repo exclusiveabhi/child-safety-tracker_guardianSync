@@ -9,6 +9,8 @@ const morgan = require('morgan');
 const nodemailer = require('nodemailer');
 const path = require('path');
 const port = 3000;
+const authMiddleware = require('./middle.js');
+app.use(express.json());
 
 // Additional requires for Socket.IO integration
 const http = require('http');
@@ -157,6 +159,12 @@ app.post('/admin/register', async (req, res) => {
 // API to login admin
 app.post('/admin/login', async (req, res) => {
   const { email, password } = req.body;
+  const allowedEmail = 'ankitsaini28052003@gmail.com';
+
+  if (email !== allowedEmail) {
+    return res.status(403).send('Login restricted to a specific email address');
+  }
+
   try {
     const admin = await Admin.findOne({ email });
     if (admin && await bcrypt.compare(password, admin.password)) {
@@ -170,6 +178,11 @@ app.post('/admin/login', async (req, res) => {
     res.status(500).send('Error logging in admin');
   }
 });
+
+app.get('/home', authMiddleware, (req, res) => {
+  res.send({ message: 'Welcome to the home page' });
+});
+
 
 // API to register student
 app.post('/student/register', async (req, res) => {

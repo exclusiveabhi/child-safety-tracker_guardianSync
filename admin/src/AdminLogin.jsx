@@ -111,7 +111,6 @@ const Footer = styled.footer`
   right: 0;
   font-size: 0.9rem;
 `;
-
 const AdminLogin = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -122,10 +121,15 @@ const AdminLogin = ({ onLogin }) => {
       const response = await axios.post(`${import.meta.env.VITE_DEVICE_IP}/admin/login`, { email, password });
       const { token } = response.data;
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      localStorage.setItem('token', token);
       onLogin();
-      navigate('/home');
+      const homeResponse = await axios.get(`${import.meta.env.VITE_DEVICE_IP}/home`);
+      if (homeResponse.status === 200) {
+        navigate('/home');
+      }
     } catch (error) {
       console.error('Login failed', error);
+      alert('Login failed');
     }
   };
 

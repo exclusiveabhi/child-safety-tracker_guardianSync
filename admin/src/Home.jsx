@@ -1,8 +1,14 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import "./Home.css";
 
 const Home = () => {
+  
+  const navigate = useNavigate();
+  const logout = () => {
+    localStorage.removeItem('token');
+    navigate('/admin-login');
+  };
   const cardData = [
     {
       title: "Real-time Tracking",
@@ -28,6 +34,7 @@ const Home = () => {
         <div className="nav-links">
           <Link to="/student/register" className="nav-link">Student Register</Link>
           <Link to="/driver/register" className="nav-link">Driver Register</Link>
+          <button onClick={logout} className="nav-link logout-button">Logout</button>
         </div>
       </nav>
 
