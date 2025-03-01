@@ -11,6 +11,7 @@ const path = require('path');
 const port = 3000;
 const authMiddleware = require('./middle.js');
 app.use(express.json());
+const BusLocation = require('./models/BusLocation');
 
 // Additional requires for Socket.IO integration
 const http = require('http');
@@ -89,20 +90,7 @@ const Admin = require('./models/Admin');
 // ----------------- END MODELS -----------------
 
 // Get bus location by bus number
-app.get('/bus-location/:busNumber', async (req, res) => {
-  const { busNumber } = req.params;
-  try {
-    const busLocation = await Location.findOne({ busNumber }).sort({ timestamp: -1 });
-    if (busLocation) {
-      res.json(busLocation);
-    } else {
-      res.status(404).send({ message: 'Bus not found' });
-    }
-  } catch (err) {
-    console.error('Error fetching bus location:', err);
-    res.status(500).send('Error fetching bus location');
-  }
-});
+
 
 // API to get students by bus number
 app.get('/students/:busNumber', async (req, res) => {
@@ -439,31 +427,70 @@ const authenticate = (req, res, next) => {
   }
 };
 
+// online/offline status endpoint
+app.post('/update-status', authenticate, async (req, res) => {
+  const { online } = req.body;
+  try {
+    let busLocation = await BusLocation.findOne({ busNumber: req.busNumber });
+    if (busLocation) {
+      busLocation.online = online; // add the "online" field to the location document
+      await busLocation.save();
+      res.json({ message: `Status updated to ${online}` });
+    } else {
+      // If no location document exists yet, create one with default coordinates (e.g., 0,0)
+      busLocation = new BusLocation({ busNumber: req.busNumber, latitude: 0, longitude: 0, online });
+      await busLocation.save();
+      res.json({ message: `Status created as ${online}`, locationId: busLocation._id });
+    }
+  } catch (error) {
+    console.error('Error updating status:', error);
+    res.status(500).json({ message: 'Error updating status' });
+  }
+});
+
+//update location driver endpoint:
 app.post('/update-location', authenticate, async (req, res) => {
   const { latitude, longitude } = req.body;
   try {
-    let busLocation = await Location.findOne({ busNumber: req.busNumber });
+    let busLocation = await BusLocation.findOne({ busNumber: req.busNumber });
     if (busLocation) {
       busLocation.latitude = latitude;
       busLocation.longitude = longitude;
+      busLocation.timestamp = new Date();
+      // Update the online field to true whenever location is updated:
+      busLocation.online = true;
       await busLocation.save();
       res.json({ message: 'Location updated' });
     } else {
-      busLocation = new Location({ busNumber: req.busNumber, latitude, longitude });
+      // When creating a new document, set online to true if the driver is active
+      busLocation = new BusLocation({ busNumber: req.busNumber, latitude, longitude, online: true });
       await busLocation.save();
       res.json({ message: 'Location created', locationId: busLocation._id });
     }
   } catch (error) {
     console.error('Error updating location:', error);
-    res.status(500).send('Error updating location');
+    res.status(500).json({ message: 'Error updating location' });
   }
 });
 
+
+
 app.get('/bus-location/:busNumber', async (req, res) => {
   const { busNumber } = req.params;
-  const busLocation = await Location.findOne({ busNumber }).sort({ timestamp: -1 });
-  res.json(busLocation);
+  try {
+    const busLocation = await BusLocation.findOne({ busNumber }).sort({ timestamp: -1 });
+    if (busLocation) {
+      res.json(busLocation);
+    } else {
+      res.status(404).json({ message: 'Bus not found' });
+    }
+  } catch (err) {
+    console.error('Error fetching bus location:', err);
+    res.status(500).json({ message: 'Error fetching bus location' });
+  }
 });
+
+
 
 // ----------------- INITIALIZATION -----------------
 
@@ -514,3 +541,4 @@ async function loadFaceModels() {
 }
 
 initializeServer();
+//locking server.js file code
