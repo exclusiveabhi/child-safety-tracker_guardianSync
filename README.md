@@ -1,6 +1,6 @@
 # GuardianSync: Real-Time Child Safety & Tracking System
 
-GuardianSync is a comprehensive solution that enhances child safety during school commutes by integrating real-time tracking, biometric verification, and automated notifications—all in one unified platform. 
+GuardianSync is a comprehensive solution that enhances child safety during school commutes by integrating real-time tracking, biometric verification, and automated notifications—all in one unified platform ! 
 
 ---
 
