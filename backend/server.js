@@ -1,8 +1,12 @@
 const express = require('express');
 const app = express();
+
+// Place CORS middleware at the very top so it applies to all requests
+const cors = require('cors');
+app.use(cors());
+
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
-const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const morgan = require('morgan');
@@ -10,18 +14,17 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const port = 3000;
 const authMiddleware = require('./middle.js');
-app.use(express.json());
+
+// Update express.json to handle large payloads (e.g., Base64 images)
+app.use(express.json({ limit: '100mb' }));
+
+// Import BusLocation model early
 const BusLocation = require('./models/BusLocation');
 
-// Additional requires for Socket.IO integration
-const http = require('http');
-const socketio = require('socket.io');
-
 app.use(morgan('dev'));
-app.use(cors());
 require('dotenv').config();
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+app.use(bodyParser.json({ limit: '100mb' }));
+app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 
 // ----------------- MONGODB CONNECTION -----------------
 async function initializeDatabase() {
@@ -90,7 +93,6 @@ const Admin = require('./models/Admin');
 // ----------------- END MODELS -----------------
 
 // Get bus location by bus number
-
 
 // API to get students by bus number
 app.get('/students/:busNumber', async (req, res) => {
@@ -170,7 +172,6 @@ app.post('/admin/login', async (req, res) => {
 app.get('/home', authMiddleware, (req, res) => {
   res.send({ message: 'Welcome to the home page' });
 });
-
 
 // API to register student
 app.post('/student/register', async (req, res) => {
@@ -448,7 +449,7 @@ app.post('/update-status', authenticate, async (req, res) => {
   }
 });
 
-//update location driver endpoint:
+// update location driver endpoint:
 app.post('/update-location', authenticate, async (req, res) => {
   const { latitude, longitude } = req.body;
   try {
@@ -473,8 +474,6 @@ app.post('/update-location', authenticate, async (req, res) => {
   }
 });
 
-
-
 app.get('/bus-location/:busNumber', async (req, res) => {
   const { busNumber } = req.params;
   try {
@@ -490,16 +489,14 @@ app.get('/bus-location/:busNumber', async (req, res) => {
   }
 });
 
-
-
 // ----------------- INITIALIZATION -----------------
-
 async function initializeServer() {
   try {
     await initializeDatabase();
     await loadFaceModels();
-    //ankit Saini
     // Create HTTP server and attach Socket.IO without modifying existing endpoints.
+    const http = require('http');
+    const socketio = require('socket.io');
     const server = http.createServer(app);
     const io = socketio(server, { cors: { origin: "*" } });
     
@@ -541,4 +538,4 @@ async function loadFaceModels() {
 }
 
 initializeServer();
-//locking server.js file code
+//locking sever.js
