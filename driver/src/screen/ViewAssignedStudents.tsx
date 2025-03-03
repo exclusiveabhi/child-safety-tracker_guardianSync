@@ -11,7 +11,7 @@ import {
 import { useRoute, RouteProp } from '@react-navigation/native';
 import io from 'socket.io-client'; // Socket.IO client for real-time updates
 
-const DEVICE_IP = "http://192.168.177.51:3000";
+const DEVICE_IP = "http://192.168.213.51:3000";
 
 interface ScanEvent {
   scanType: string; // e.g., "pickup_home", "dropoff_school", "pickup_school", "dropoff_home"
@@ -137,6 +137,40 @@ const ViewAssignedStudents: React.FC = () => {
 
   // Render a card for each student showing their details and scan statuses.
   const renderStudentCard = ({ item }: { item: Student }) => {
+    // Check if student has been marked absent today.
+    const isAbsentToday = item.scans.some(scan => scan.scanType === 'absent' && isToday(scan.timestamp));
+
+    if (isAbsentToday) {
+      const currentDateTime = new Date();
+
+const year = currentDateTime.getFullYear();
+const month = String(currentDateTime.getMonth() + 1).padStart(2, '0'); 
+const day = String(currentDateTime.getDate()).padStart(2, '0');
+let hours = currentDateTime.getHours();
+const minutes = String(currentDateTime.getMinutes()).padStart(2, '0');
+const seconds = String(currentDateTime.getSeconds()).padStart(2, '0');
+const ampm = hours >= 12 ? 'PM' : 'AM';
+
+// Convert to 12-hour format
+hours = hours % 12 || 12;
+
+const formattedDateTime = `${hours}:${minutes}:${seconds} ${ampm}`;
+
+      return (
+        <View style={[styles.card, styles.absentCard]}>
+          <Image source={{ uri: item.photo }} style={styles.absentPhoto} />
+          <View style={styles.details}>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.info}>ID: {item.studentId}</Text>
+            <Text style={styles.info}>Class: {item.class}</Text>
+            <Text style={styles.info}>Route: {item.route}</Text>
+            <Text style={styles.absentMessage}>Student marked absent for {day}-{month}-{year} </Text>
+          </View>
+        </View>
+      );
+    }
+
+    // Otherwise, show the regular scan statuses.
     const morningPickupStatus = getScanStatusForType(item.scans, 'pickup_home');
     const morningDropOffStatus = getScanStatusForType(item.scans, 'dropoff_school');
     const eveningPickupStatus = getScanStatusForType(item.scans, 'pickup_school');
@@ -208,6 +242,7 @@ const ViewAssignedStudents: React.FC = () => {
         <FlatList 
           data={students}
           keyExtractor={(item) => item._id}
+          extraData={students}  // Ensures re-render when student values change
           renderItem={renderStudentCard}
           contentContainerStyle={styles.listContent}
         />
@@ -259,6 +294,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
   },
+  absentCard: {
+    backgroundColor: '#ffe6e6', // A light red background for absent students
+  },
   photo: {
     width: 120,
     height: 140,
@@ -286,5 +324,17 @@ const styles = StyleSheet.create({
   scanStatusText: {
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  absentMessage: {
+    marginTop: 10,
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: 'red',
+  },
+ absentPhoto: {
+  width: 120,
+    height: 140,
+    borderRadius: 20,
+    marginTop: 1,
   },
 });

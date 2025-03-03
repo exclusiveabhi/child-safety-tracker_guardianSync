@@ -295,6 +295,7 @@ function isToday(dateInput) {
   );
 }
 
+
 app.post('/scan-face', async (req, res) => {
   const { busNumber, scanType, scannedFace } = req.body;
   
@@ -333,14 +334,20 @@ app.post('/scan-face', async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
     
-    const isAbsent = bestMatch.scans.some(event => event.scanType === "absent" && isToday(event.timestamp));
+    // ***** LOCKING LOGIC: Prevent further scans if the student is marked absent today *****
+    const isAbsent = bestMatch.scans.some(
+      event => event.scanType === "absent" && isToday(event.timestamp)
+    );
     if (isAbsent) {
       return res.status(400).json({ message: 'Student marked absent for today.' });
     }
+    // ************************************************************************************
     
     if ((scanType === "dropoff_school" || scanType === "dropoff_home")) {
       const expectedPickupType = (scanType === "dropoff_school") ? "pickup_home" : "pickup_school";
-      const pickupEvent = bestMatch.scans.find(event => event.scanType === expectedPickupType && isToday(event.timestamp));
+      const pickupEvent = bestMatch.scans.find(
+        event => event.scanType === expectedPickupType && isToday(event.timestamp)
+      );
       if (!pickupEvent) {
         return res.status(400).json({ message: 'Student not properly picked up earlier; cannot drop off.' });
       }
@@ -377,19 +384,27 @@ app.post('/scan-face', async (req, res) => {
       text,
     });
     
+    // Updated block for absent notification during morning drop off:
     if (scanType === "dropoff_school" && cycle === "morning") {
       for (const student of students) {
         student.scans = student.scans.filter(event => new Date(event.timestamp) > twentyHoursAgo);
-        const hasPickup = student.scans.some(event => event.scanType === "pickup_home" && isToday(event.timestamp));
-        const alreadyAbsent = student.scans.some(event => event.scanType === "absent" && isToday(event.timestamp));
-        if (!hasPickup && !alreadyAbsent) {
-          const absentEvent = {
-            scanType: "absent",
-            cycle: "morning",
-            timestamp: new Date(),
-            success: false,
-          };
-          student.scans.push(absentEvent);
+        const hasPickup = student.scans.some(
+          event => event.scanType === "pickup_home" && isToday(event.timestamp)
+        );
+        const alreadyAbsent = student.scans.some(
+          event => event.scanType === "absent" && isToday(event.timestamp)
+        );
+        // Trigger email for absent student regardless of prior absent event
+        if (!hasPickup) {
+          if (!alreadyAbsent) {
+            const absentEvent = {
+              scanType: "absent",
+              cycle: "morning",
+              timestamp: new Date(),
+              success: false,
+            };
+            student.scans.push(absentEvent);
+          }
           await student.save();
           await transporter.sendMail({
             from: process.env.EMAIL_USER,
@@ -397,7 +412,7 @@ app.post('/scan-face', async (req, res) => {
             subject: `Absence Notification: ${student.name}`,
             text: `Student ${student.name} (ID: ${student.studentId}) was not picked up this morning on bus ${busNumber} and is marked absent for today.`
           });
-          console.log(`Student ${student.studentId} marked absent.`);
+          console.log(`Absent email triggered for student ${student.studentId}.`);
         }
       }
     }
@@ -408,6 +423,7 @@ app.post('/scan-face', async (req, res) => {
     return res.status(500).json({ message: 'Error processing face scan' });
   }
 });
+
 
 // ----------------- AUTHENTICATION & LOCATION -----------------
 const authenticate = (req, res, next) => {

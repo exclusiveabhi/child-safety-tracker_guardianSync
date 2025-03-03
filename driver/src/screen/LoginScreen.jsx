@@ -20,7 +20,7 @@ import { useNavigation } from "@react-navigation/native";
 
 //env not working
 
-const DEVICE_IP = "http://192.168.177.51:3000";
+const DEVICE_IP = "http://192.168.213.51:3000";
 
 const LoginScreen = () => {
   const navigation = useNavigation();
