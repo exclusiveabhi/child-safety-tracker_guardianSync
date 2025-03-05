@@ -140,7 +140,7 @@ GuardianSync empowers schools, parents, and drivers by providing:
 - **Environment Variables:**  
   Double-check the `.env` files in both the **admin** and **driver** folders.
 - **Logs & Errors:**  
-  Refer to terminal logs for detailed error messages. Verify that your MongoDB instance is active. 📝
+  Refer to terminal logs for detailed error messages. 📝
 
 ---
 
