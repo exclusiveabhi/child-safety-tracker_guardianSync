@@ -123,7 +123,7 @@ GuardianSync empowers schools, parents, and drivers by providing:
    npx react-native run-android
    ```
 3. **Diagnostic Command:**  
-   If issues arise, run:
+   If issues arise, run:-
    ```bash
    npx react-native doctor
    ```
