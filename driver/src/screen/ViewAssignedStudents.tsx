@@ -11,7 +11,7 @@ import {
 import { useRoute, RouteProp } from '@react-navigation/native';
 import io from 'socket.io-client'; // Socket.IO client for real-time updates
 
-const DEVICE_IP = "http://192.168.213.51:3000";
+const DEVICE_IP = "http://192.168.7.51:3000";
 
 interface ScanEvent {
   scanType: string; // e.g., "pickup_home", "dropoff_school", "pickup_school", "dropoff_home"

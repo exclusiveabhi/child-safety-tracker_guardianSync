@@ -22,7 +22,7 @@ interface RouteParams {
   token?: string;
 }
 
-const DEVICE_IP = "http://192.168.213.51:3000";
+const DEVICE_IP = "http://192.168.7.51:3000";
 
 const requestLocationPermission = async (): Promise<boolean> => {
   if (Platform.OS === 'android') {
