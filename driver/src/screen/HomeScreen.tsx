@@ -1,4 +1,3 @@
-// src/screen/HomeScreen.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -22,7 +21,7 @@ interface RouteParams {
   token?: string;
 }
 
-const DEVICE_IP = "http://192.168.7.51:3000";
+const DEVICE_IP = "http://192.168.95.51:3000";
 
 const requestLocationPermission = async (): Promise<boolean> => {
   if (Platform.OS === 'android') {
