@@ -79,11 +79,58 @@ const StudentRegister = () => {
     reader.readAsDataURL(file);
   };
 
+  const validate = () => {
+    if (!/^[A-Za-z\s]+$/.test(name)) {
+      alert("Name should not contain numbers or special characters.");
+      return false;
+    }
+    if (!/^\d{10}$/.test(number)) {
+      alert("Number should be exactly 10 digits.");
+      return false;
+    }
+    if (!/^\d+$/.test(studentId)) {
+      alert("Student ID should be numeric.");
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      alert("Please enter a valid email address.");
+      return false;
+    }
+    if (!/^\d{1,2}$/.test(studentClass)) {
+      alert("Class should be numeric and maximum 2 digits.");
+      return false;
+    }
+    if (!/^[A-Za-z]+$/.test(route)) {
+      alert("Route should contain only letters and no spaces.");
+      return false;
+    }
+    if (!/^\d{4}$/.test(busNumber)) {
+      alert("Bus number should be exactly 4 digits.");
+      return false;
+    }
+    if (!photo) {
+      alert("Photo is required.");
+      return false;
+    }
+    return true;
+  };
+
   const register = async () => {
+    if (!validate()) return;
+
     try {
       await axios.post(
         `${import.meta.env.VITE_DEVICE_IP}/student/register`,
-        { name, number, studentId, email, class: studentClass, route, busNumber, photo }
+        {
+          name,
+          number,
+          studentId,
+          email,
+          class: studentClass,
+          route,
+          busNumber,
+          photo,
+        }
       );
       alert("Student registered successfully");
     } catch (error) {

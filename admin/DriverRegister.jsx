@@ -67,7 +67,25 @@ const DriverRegister = () => {
   const [password, setPassword] = useState('');
   const [route, setRoute] = useState('');
 
+  const validate = () => {
+    if (!/^\d{4}$/.test(busNumber)) {
+      alert('Bus number must be exactly 4 digits');
+      return false;
+    }
+    if (password.length < 4) {
+      alert('Password must be at least 4 characters long');
+      return false;
+    }
+    if (!/^[A-Za-z]+$/.test(route)) {
+      alert('Route must contain only letters without spaces or numbers');
+      return false;
+    }
+    return true;
+  };
+
   const register = async () => {
+    if (!validate()) return;
+
     try {
       await axios.post(`${import.meta.env.VITE_DEVICE_IP}/register`, {
         busNumber,
