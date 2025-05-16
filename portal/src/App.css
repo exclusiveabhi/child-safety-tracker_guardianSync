@@ -1,0 +1,16 @@
+/* App.css */
+#map {
+    height: 100vh;
+  }
+  
+  input {
+    margin: 10px;
+    padding: 5px;
+    font-size: 16px;
+  }
+  
+  button {
+    padding: 5px 10px;
+    font-size: 16px;
+    cursor: pointer;
+  }
